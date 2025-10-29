@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MusclePilot — Saiyan Lite</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ff7a00" />
+  <style>
+    :root{--orange:#ff7a00;--blue:#2563eb;--bg:#0b1220;--white:#ffffff;--muted:#64748b}
+    *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;
+      background: radial-gradient(900px 500px at 50% 30%, rgba(255,122,0,.12),rgba(255,122,0,0)),
+                  radial-gradient(700px 400px at 70% 70%, rgba(37,99,235,.10),rgba(37,99,235,0)),
+                  #0b1220; color: #e2e8f0}
+    .wrap{max-width:1000px;margin:0 auto;padding:16px}
+    .header{display:flex;align-items:center;justify-content:space-between;margin:6px 0 12px}
+    .title{font-weight:800;font-size:22px;background:linear-gradient(90deg,var(--orange),#ffa94d,var(--blue));
+           -webkit-background-clip:text;background-clip:text;color:transparent}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tab{padding:8px 12px;border:1px solid #1f2937;background:#111827;border-radius:12px;color:#e5e7eb;cursor:pointer}
+    .tab.active{background:linear-gradient(90deg,#1f2937,#0f172a);border-color:#334155}
+    .card{background:#0b1325;border:1px solid #1f2937;border-radius:16px;padding:16px;margin:10px 0}
+    .grid{display:grid;gap:10px}
+    @media(min-width:700px){.grid.cols-2{grid-template-columns:1fr 1fr;} .grid.cols-3{grid-template-columns:1fr 1fr 1fr;}}
+    label{display:block;font-size:12px;color:#9aa7b8;margin-bottom:4px}
+    input,select{width:100%;padding:8px;border-radius:10px;border:1px solid #334155;background:#0b152a;color:#e2e8f0}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{padding:8px 12px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;border-radius:10px;cursor:pointer}
+    .btn.primary{background:linear-gradient(90deg,var(--orange),#ffa94d);color:#111827;border-color:#ffa94d}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
+    .tile{display:flex;align-items:center;justify-content:space-between;border:1px solid #1f2937;border-radius:14px;padding:10px;background:#0c162a}
+    .ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
+    .low{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25)}
+    .high{background:rgba(234,179,8,.12);border-color:rgba(234,179,8,.25)}
+    .muted{color:#94a3b8}
+    canvas{background:#0b1325;border:1px solid #1f2937;border-radius:14px;padding:6px}
+    .splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:
+      radial-gradient(500px 300px at 50% 60%, rgba(255,193,7,.18), rgba(0,0,0,0)),
+      linear-gradient(180deg,#0b1220 0%, #0e162a 100%); z-index:50; animation:fadeOut 1.6s ease 0.3s forwards}
+    .logo{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);backdrop-filter:blur(6px);
+      border:1px solid rgba(255,255,255,.15); padding:12px 16px;border-radius:16px}
+    .logo b{background:linear-gradient(90deg,var(--orange),#ffa94d,var(--blue));
+           -webkit-background-clip:text;background-clip:text;color:transparent;font-size:18px}
+    @keyframes fadeOut{to{opacity:0;visibility:hidden}}
+  </style>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', ()=> navigator.serviceWorker.register('/sw.js'));
+    }
+  </script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <div id="splash" class="splash">
+    <div class="logo">
+      <img src="/icons/icon-192x192.png" width="28" height="28" alt="logo"/>
+      <div>
+        <b>MusclePilot</b><div class="muted" style="font-size:12px;margin-top:-2px">Saiyan Lite</div>
+      </div>
+      <div style="font-size:12px;margin-left:8px;color:#f59e0b">Transformation… ⚡</div>
+    </div>
+  </div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+
+    const defaultProfile = { sex:'M', age:31, heightCm:184, weightKg:79.2, sessionsPerWeek:4, activityFactor:1.6, goal:'recomp', deficitPct:0.10 };
+    const defaultTargets = { Pecs:[12,20], Delts_Ant:[10,16], Delts_Lat:[10,20], Dos:[12,20], Biceps:[8,16], Triceps:[8,16], Quads:[12,20], Ischios:[10,18], Fessiers:[10,18], Mollets:[8,20], Abdos:[8,20] };
+    const muscles = Object.keys(defaultTargets);
+
+    const EXS = {
+      "Bench Press": { M:{Pecs:.7, Delts_Ant:.2, Triceps:.1}, R:[6,8] },
+      "Incline DB Press": { M:{Pecs:.6, Delts_Ant:.3, Triceps:.1}, R:[8,10] },
+      "Dips": { M:{Pecs:.5, Triceps:.4, Delts_Ant:.1}, R:[8,12] },
+      "Overhead DB Press": { M:{Delts_Ant:.6, Delts_Lat:.2, Triceps:.2}, R:[8,12] },
+      "Lateral Raises": { M:{Delts_Lat:1}, R:[12,15] },
+      "Face Pulls": { M:{Delts_Lat:.5, Dos:.5}, R:[12,15] },
+      "Pull Ups": { M:{Dos:.7, Biceps:.3}, R:[6,8] },
+      "Barbell Row": { M:{Dos:.8, Biceps:.2}, R:[8,10] },
+      "Seated Cable Row": { M:{Dos:.8, Biceps:.2}, R:[10,12] },
+      "Lat Pulldown": { M:{Dos:.8, Biceps:.2}, R:[8,12] },
+      "Curl Bar": { M:{Biceps:1}, R:[10,12] },
+      "Back Squat": { M:{Quads:.7, Fessiers:.2, Ischios:.1}, R:[6,8] },
+      "Walking Lunge": { M:{Quads:.5, Fessiers:.4, Ischios:.1}, R:[10,10] },
+      "Leg Press": { M:{Quads:.7, Fessiers:.2, Ischios:.1}, R:[10,12] },
+      "Leg Extension": { M:{Quads:1}, R:[12,15] },
+      "Romanian Deadlift": { M:{Ischios:.6, Fessiers:.3, Dos:.1}, R:[6,8] },
+      "Hip Thrust": { M:{Fessiers:.7, Ischios:.2}, R:[8,10] },
+      "Leg Curl": { M:{Ischios:1}, R:[12,15] },
+      "Bulgarian Split Squat": { M:{Fessiers:.5, Quads:.4, Ischios:.1}, R:[10,12] },
+      "Calf Raise": { M:{Mollets:1}, R:[12,20] },
+      "Plank": { M:{Abdos:1}, R:[45,60] },
+      "Hanging Leg Raises": { M:{Abdos:1}, R:[10,15] },
+    };
+
+    const PLAN4 = [
+      {name:"Upper — Push", ex:[ ["Bench Press",4], ["Incline DB Press",3], ["Dips",3], ["Overhead DB Press",3], ["Lateral Raises",3], ["Plank",3] ]},
+      {name:"Lower — Quads", ex:[ ["Back Squat",4], ["Walking Lunge",3], ["Leg Press",3], ["Leg Extension",3], ["Calf Raise",3], ["Hanging Leg Raises",3] ]},
+      {name:"Upper — Pull", ex:[ ["Pull Ups",4], ["Barbell Row",3], ["Seated Cable Row",3], ["Lat Pulldown",3], ["Curl Bar",3], ["Face Pulls",3], ["Plank",3] ]},
+      {name:"Lower — Posterior Chain", ex:[ ["Romanian Deadlift",4], ["Hip Thrust",3], ["Leg Curl",3], ["Bulgarian Split Squat",3], ["Calf Raise",3], ["Hanging Leg Raises",3] ]},
+    ];
+
+    const round = (n, d=0)=> Number(n.toFixed(d));
+    const BMR = p => (10*p.weightKg + 6.25*p.heightCm - 5*p.age + (p.sex==='F'?-161:5));
+    function macro(p){
+      const b = BMR(p), tdee = b*p.activityFactor;
+      let target = tdee;
+      if(p.goal==='recomp') target = tdee*(1-p.deficitPct);
+      if(p.goal==='cut') target = tdee*0.85;
+      if(p.goal==='bulk') target = tdee*1.08;
+      const proteinG = Math.round(2.2*p.weightKg);
+      const fatG = Math.round((0.25*target)/9);
+      const carbsG = Math.max(0, Math.round((target - proteinG*4 - fatG*9)/4));
+      return { bmr:round(b), tdee:round(tdee), target:round(target), proteinG, fatG, carbsG };
+    }
+    const epley1RM = (w,r)=> (w&&r? w*(1+r/30): null);
+
+    function useLocal(key, init){
+      const [v,setV] = React.useState(()=>{
+        try { const raw = localStorage.getItem(key); return raw? JSON.parse(raw): init; } catch { return init; }
+      });
+      React.useEffect(()=>{ try{ localStorage.setItem(key, JSON.stringify(v)); }catch{} },[key,v]);
+      return [v,setV];
+    }
+
+    function weekKey(offset=0){
+      const d = new Date(); const oneJan = new Date(d.getFullYear(),0,1);
+      const week = Math.ceil((((d - oneJan)/86400000) + oneJan.getDay()+1)/7) + offset;
+      return `${d.getFullYear()}-W${week}`;
+    }
+
+    function volumeOf(plan){
+      const vol = {}; muscles.forEach(m=>vol[m]=0);
+      plan.forEach(day=> day.ex.forEach(([name,sets])=>{
+        const def = EXS[name]; if(!def) return;
+        Object.entries(def.M).forEach(([m,w])=>{ vol[m]+= sets*w; });
+      }));
+      Object.keys(vol).forEach(m=> vol[m]=round(vol[m],1));
+      return vol;
+    }
+
+    function Tabs({active,onSet}){
+      const items = [["profile","Profil"],["plan","Programme"],["log","Séances"],["analytics","Analyse"],["export","Export"]];
+      return <div className="tabs">{items.map(([k,lab])=>(
+        <button key={k} className={"tab"+(active===k?" active":"")} onClick={()=>onSet(k)}>{lab}</button>
+      ))}</div>
+    }
+
+    function App(){
+      const [tab, setTab] = useState("profile");
+      const [profile,setProfile] = useLocal("mp_prof", defaultProfile);
+      const [plan,setPlan] = useLocal("mp_plan", PLAN4);
+      const [logs,setLogs] = useLocal("mp_logs", {});
+      const [wk,setWk] = useLocal("mp_wkOffset", 0);
+      const [selected, setSelected] = useState("Bench Press");
+
+      useEffect(()=>{
+        const t = setTimeout(()=>{
+          const el = document.getElementById("splash");
+          if(navigator.vibrate) try{ navigator.vibrate(20) }catch(e){}
+          if(el) el.style.display="none";
+        }, 1600);
+        return ()=>clearTimeout(t);
+      },[]);
+
+      const vol = useMemo(()=> volumeOf(plan),[plan]);
+      const macros = useMemo(()=> macro(profile),[profile]);
+      const currentWeek = weekKey(wk);
+      const isDeload = (Number(currentWeek.split('W')[1])%5)===0;
+
+      function setSets(di, ei, val){
+        setPlan(prev => prev.map((d,i)=> i!==di? d : ({...d, ex: d.ex.map((e,j)=> j!==ei? e : [e[0], Math.max(1,Number(val)||1)])})));
+      }
+
+      function addLog(di, exName, setIdx, weight, reps){
+        setLogs(prev => {
+          const w = prev[currentWeek] || {};
+          const d = w[di] || {};
+          const e = d[exName] || [];
+          return {...prev, [currentWeek]:{...w, [di]:{...d, [exName]: [...e, {set:setIdx, weight, reps}]}}};
+        });
+      }
+
+      function exEntriesForWeek(week, name){
+        const w = logs[week]||{}; const days = Object.values(w); const arr=[];
+        days.forEach(d => (d[name]||[]).forEach(s=>arr.push({...s})));
+        return arr;
+      }
+
+      function suggest(entries, range){
+        if(!entries.length) return "Commence à mi-plage.";
+        const last = entries[entries.length-1];
+        if(!last.reps) return "Entre tes reps pour suggérer.";
+        if(last.reps >= range[1]) return "+2.5 à 5% semaine pro.";
+        if(last.reps < range[0]) return "Sous la plage : -5% ou monte en reps.";
+        return "Garde la charge, vise +1 rep/série.";
+      }
+
+      useEffect(()=>{
+        const keys = Object.keys(logs).sort(); const data=[];
+        keys.forEach(k=>{
+          let best=0; const w = logs[k]||{};
+          Object.values(w).forEach(d=> (d[selected]||[]).forEach(s=>{
+            const est = epley1RM(s.weight, s.reps)||0; if(est>best) best=est;
+          }));
+          if(best>0) data.push({week:k, e1rm: Math.round(best*10)/10});
+        });
+        const ctx = document.getElementById('chart');
+        if(!ctx) return;
+        if(window._chart){ window._chart.destroy(); }
+        window._chart = new Chart(ctx, {
+          type:'line',
+          data:{ labels: data.map(d=>d.week), datasets:[{ label:`e1RM - ${selected}`, data: data.map(d=>d.e1rm) }]},
+          options:{ responsive:true, scales:{ y:{ beginAtZero:false } } }
+        });
+      },[logs, selected]);
+
+      function cls(val, [lo,hi]){
+        if(val<lo) return "tile low";
+        if(val>hi) return "tile high";
+        return "tile ok";
+      }
+
+      return (
+        <div className="wrap">
+          <div className="header">
+            <div className="title">MusclePilot — Saiyan Lite</div>
+            <div className="pill">Semaine: {currentWeek} {isDeload? <span style={{color:'#f59e0b',marginLeft:6}}>Deload conseillé (−20%)</span>: null}</div>
+          </div>
+
+          <Tabs active={tab} onSet={setTab} />
+
+          {tab==="profile" && (
+            <div className="card">
+              <div className="grid cols-2">
+                <div><label>Taille (cm)</label><input type="number" value={profile.heightCm} onChange={e=>setProfile({...profile, heightCm:Number(e.target.value)})}/></div>
+                <div><label>Poids (kg)</label><input type="number" step="0.1" value={profile.weightKg} onChange={e=>setProfile({...profile, weightKg:Number(e.target.value)})}/></div>
+                <div><label>Âge</label><input type="number" value={profile.age} onChange={e=>setProfile({...profile, age:Number(e.target.value)})}/></div>
+                <div><label>Sexe</label>
+                  <select value={profile.sex} onChange={e=>setProfile({...profile, sex:e.target.value})}><option value="M">Homme</option><option value="F">Femme</option></select>
+                </div>
+                <div><label>Objectif</label>
+                  <select value={profile.goal} onChange={e=>setProfile({...profile, goal:e.target.value})}>
+                    <option value="recomp">Recomposition</option>
+                    <option value="cut">Sèche</option>
+                    <option value="bulk">Prise de masse</option>
+                  </select>
+                </div>
+                {profile.goal==='recomp' && (
+                  <div><label>Déficit (%)</label><input type="number" value={Math.round(profile.deficitPct*100)} onChange={e=>setProfile({...profile, deficitPct: (Number(e.target.value)||0)/100})}/></div>
+                )}
+                <div><label>Activité (facteur)</label>
+                  <select value={String(profile.activityFactor)} onChange={e=>setProfile({...profile, activityFactor:Number(e.target.value)})}>
+                    {[1.2,1.375,1.55,1.6,1.725,1.9].map(v=><option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div><label>Séances / semaine</label>
+                  <select value={String(profile.sessionsPerWeek)} onChange={e=>setProfile({...profile, sessionsPerWeek:Number(e.target.value)})}>
+                    {[3,4,5].map(v=><option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid cols-3" style={{marginTop:12}}>
+                <div className="tile"><span className="muted">BMR</span><b>{macro(profile).bmr} kcal</b></div>
+                <div className="tile"><span className="muted">TDEE</span><b>{macro(profile).tdee} kcal</b></div>
+                <div className="tile"><span className="muted">Cible</span><b>{macro(profile).target} kcal</b></div>
+                <div className="tile"><span className="muted">Prot</span><b>{macro(profile).proteinG} g</b></div>
+                <div className="tile"><span className="muted">Lip</span><b>{macro(profile).fatG} g</b></div>
+                <div className="tile"><span className="muted">Gluc</span><b>{macro(profile).carbsG} g</b></div>
+              </div>
+            </div>
+          )}
+
+          {tab==="plan" && (
+            <div className="card">
+              {plan.map((d,di)=>(
+                <div key={di} className="card" style={{margin:"12px 0"}}>
+                  <div className="row"><b>Jour {di+1} — {d.name}</b></div>
+                  {d.ex.map(([name,sets],ei)=>(
+                    <div key={ei} className="row" style={{justifyContent:'space-between'}}>
+                      <div><div><b>{name}</b></div><div className="muted" style={{fontSize:12}}>{(EXS[name]?.R||[8,12]).join('–')} reps</div></div>
+                      <div style={{minWidth:120}}><label>Séries</label><input type="number" min="1" value={sets} onChange={e=>setSets(di,ei,e.target.value)} /></div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              <div className="card">
+                <b>Volume hebdo par muscle</b>
+                <div className="grid cols-3" style={{marginTop:10}}>
+                  {muscles.map(m=>{
+                    const v = vol[m]||0, t = defaultTargets[m]||[0,0];
+                    const klass = v < t[0] ? "tile low" : (v>t[1] ? "tile high" : "tile ok");
+                    return <div key={m} className={klass}><span>{m}</span><b>{v}</b></div>
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab==="log" && (
+            <div className="card">
+              <div className="row">
+                <button className="btn" onClick={()=>setWk(wk-1)}>-1 semaine</button>
+                <button className="btn" onClick={()=>setWk(0)}>Cette semaine</button>
+                <button className="btn" onClick={()=>setWk(wk+1)}>+1 semaine</button>
+              </div>
+
+              {plan.map((d,di)=>(
+                <div key={di} className="card" style={{margin:"12px 0"}}>
+                  <b>{d.name}</b>
+                  {d.ex.map(([name,sets],ei)=>(
+                    <div key={ei} className="card">
+                      <div className="row" style={{justifyContent:'space-between'}}>
+                        <div>
+                          <div><b>{name}</b></div>
+                          <div className="muted" style={{fontSize:12}}>Cible {sets}×{(EXS[name]?.R||[8,12]).join('–')} reps</div>
+                        </div>
+                        <div className="muted" style={{fontSize:12}}>
+                          {(function(){
+                            const entries = (logs[weekKey(wk)]||{})[di]?.[name]||[];
+                            if(!entries.length) return "Commence à mi-plage.";
+                            const last = entries[entries.length-1];
+                            const rr = EXS[name]?.R||[8,12];
+                            if(!last.reps) return "Entre tes reps pour suggérer.";
+                            if(last.reps >= rr[1]) return "+2.5 à 5% semaine pro.";
+                            if(last.reps < rr[0]) return "Sous la plage : -5% ou monte en reps.";
+                            return "Garde la charge, vise +1 rep/série.";
+                          })()}
+                        </div>
+                      </div>
+                      <div className="grid cols-3">
+                        {Array.from({length:sets}).map((_,sidx)=> (
+                          <div key={sidx} className="tile">
+                            <div>
+                              <label>Poids (kg)</label>
+                              <input type="number" inputMode="decimal" placeholder="kg" onChange={e=>window.__w=Number(e.target.value)} />
+                            </div>
+                            <div>
+                              <label>Reps</label>
+                              <input type="number" inputMode="numeric" placeholder="reps" onChange={e=>window.__r=Number(e.target.value)} />
+                            </div>
+                            <button className="btn primary" onClick={()=>addLog(di, name, sidx+1, window.__w||0, window.__r||0)}>Ajouter</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab==="analytics" && (
+            <div className="card">
+              <div className="row">
+                <label>Exercice</label>
+                <select value={selected} onChange={e=>setSelected(e.target.value)}>
+                  {Object.keys(EXS).map(k=> <option key={k} value={k}>{k}</option>)}
+                </select>
+              </div>
+              <div style={{marginTop:10}}>
+                <canvas id="chart" height="200"></canvas>
+              </div>
+            </div>
+          )}
+
+          {tab==="export" && (
+            <div className="card">
+              <div className="row">
+                <button className="btn" onClick={()=>{
+                  const rows = [["Week","Day","Exercise","Set","Weight","Reps"]];
+                  Object.entries(logs).forEach(([week, days])=>{
+                    Object.entries(days).forEach(([dIdx, exs])=>{
+                      Object.entries(exs).forEach(([exName, sets])=>{
+                        sets.forEach(s=> rows.push([week, Number(dIdx)+1, exName, s.set, s.weight, s.reps]));
+                      });
+                    });
+                  });
+                  const csv = rows.map(r=>r.join(",")).join("\n");
+                  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href=url; a.download='musclepilot_logs.csv'; a.click();
+                  URL.revokeObjectURL(url);
+                }}>Exporter CSV</button>
+
+                <button className="btn" onClick={()=>{
+                  localStorage.clear(); alert("Données réinitialisées.");
+                }}>Réinitialiser</button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
